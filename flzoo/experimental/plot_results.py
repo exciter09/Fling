@@ -68,6 +68,7 @@ def plot_group(dataset, split, log_root, output_dir):
     fig, ax = plt.subplots(figsize=(8, 5))
 
     has_data = False
+    best_records = []
     for method in METHODS:
         exp_name = f'{dataset}_{method}_{split}'
         log_dir = os.path.join(log_root, exp_name)
@@ -77,6 +78,8 @@ def plot_group(dataset, split, log_root, output_dir):
         if not steps:
             continue
         has_data = True
+        best_idx = max(range(len(values)), key=lambda i: values[i])
+        best_records.append((METHOD_DISPLAY.get(method, method), steps[best_idx], values[best_idx]))
         ax.plot(
             steps, values,
             label=METHOD_DISPLAY.get(method, method),
@@ -104,6 +107,12 @@ def plot_group(dataset, split, log_root, output_dir):
     fig.savefig(os.path.join(output_dir, fname), dpi=150, bbox_inches='tight')
     print(f'Saved: {fname}')
     plt.close(fig)
+
+    print(f'\n  [Best Acc] {title}')
+    print(f'  {"Method":<25s} {"Round":>6s} {"Acc":>10s}')
+    print(f'  {"-"*25} {"-"*6} {"-"*10}')
+    for name, rnd, acc in best_records:
+        print(f'  {name:<25s} {rnd:>6d} {acc:>10.4f}')
 
 
 def main():

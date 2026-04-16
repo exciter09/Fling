@@ -12,6 +12,7 @@ exp_args = dict(
         global_eps=40,
         batch_size=32,
         optimizer=dict(name='sgd', lr=0.02, momentum=0.9),
+        test_place=['before_aggregation', 'after_aggregation'],
     ),
     model=dict(
         name='resnet8',
