@@ -4,7 +4,7 @@ exp_args = dict(
     data=dict(
         dataset='cifar10',
         data_path='./data/CIFAR10',
-        sample_method=dict(name='dirichlet', alpha=0.1, train_num=500, test_num=100),
+        sample_method=dict(name='dirichlet', alpha=0.5, train_num=500, test_num=100),
     ),
     learn=dict(
         device='cuda:0',
@@ -14,14 +14,14 @@ exp_args = dict(
         optimizer=dict(name='sgd', lr=0.02, momentum=0.9),
     ),
     model=dict(
-        name='resnet18',
+        name='resnet8',
         input_channel=3,
         class_number=10,
     ),
     client=dict(name='base_client', client_num=10),
     server=dict(name='base_server'),
-    group=dict(name='base_group', aggregation_method='generalized', aggregation_alpha=1.5),
-    other=dict(test_freq=3, logging_path='./logging/experimental/cifar10_gen1.5_resnet18_dir_0.1_c10'),
+    group=dict(name='base_group', aggregation_method='generalized', aggregation_alpha=1.0),
+    other=dict(test_freq=3, logging_path='./logging/experimental/cifar10_geomed_dir05'),
 )
 
 exp_args = EasyDict(exp_args)

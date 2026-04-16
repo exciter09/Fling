@@ -19,7 +19,7 @@ class NaiveDataset(data.Dataset):
         return len(self.indexes)
 
 
-def uniform_sampling(dataset: Dataset, client_number: int, sample_num: int, seed: int) -> List:
+def uniform_sampling(dataset: Dataset, client_number: int, sample_num: int, seed: int, **kwargs) -> List:
     r"""
     Overview:
         Uniform sampling method. For each client, the dataset is sampled randomly from the total dataset. \
@@ -57,7 +57,7 @@ def uniform_sampling(dataset: Dataset, client_number: int, sample_num: int, seed
     return [NaiveDataset(tot_data=dataset, indexes=dict_users[i]) for i in range(len(dict_users))]
 
 
-def iid_sampling(dataset: Dataset, client_number: int, sample_num: int, seed: int) -> List:
+def iid_sampling(dataset: Dataset, client_number: int, sample_num: int, seed: int, **kwargs) -> List:
     r"""
     Overview:
         Independent and identical (i.i.d) sampling method. For each client, the dataset is sampled randomly from the \

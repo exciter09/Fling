@@ -12,17 +12,16 @@ exp_args = dict(
         global_eps=40,
         batch_size=32,
         optimizer=dict(name='sgd', lr=0.02, momentum=0.9),
-        mu=0.01,
     ),
     model=dict(
-        name='resnet18',
+        name='resnet8',
         input_channel=3,
         class_number=10,
     ),
-    client=dict(name='fedprox_client', client_num=10),
+    client=dict(name='base_client', client_num=10),
     server=dict(name='base_server'),
-    group=dict(name='base_group', aggregation_method='avg'),
-    other=dict(test_freq=3, logging_path='./logging/experimental/cifar10_fedprox_resnet18_dir_0.1_c10'),
+    group=dict(name='base_group', aggregation_method='median'),
+    other=dict(test_freq=3, logging_path='./logging/experimental/cifar10_fedmedian_dir01'),
 )
 
 exp_args = EasyDict(exp_args)
