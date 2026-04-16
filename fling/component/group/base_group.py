@@ -2,7 +2,7 @@ import time
 import torch
 
 from fling.utils import get_params_number
-from fling.utils.compress_utils import fed_avg
+from fling.utils.compress_utils import fed_avg, fed_median, fed_generalized_aggregation
 from fling.utils.registry_utils import GROUP_REGISTRY
 from fling.utils import Logger, get_weights
 from fling.component.client import ClientTemplate
@@ -112,6 +112,17 @@ class ParameterServerGroup:
 
         if self.args.group.aggregation_method == 'avg':
             trans_cost = fed_avg(participate_clients, self.server)
+            self.sync()
+        elif self.args.group.aggregation_method == 'median':
+            trans_cost = fed_median(participate_clients, self.server)
+            self.sync()
+        elif self.args.group.aggregation_method == 'generalized':
+            alpha = self.args.group.get('aggregation_alpha', 1.5)
+            max_iter = self.args.group.get('aggregation_max_iter', 100)
+            tol = self.args.group.get('aggregation_tol', 1e-6)
+            trans_cost = fed_generalized_aggregation(
+                participate_clients, self.server, alpha=alpha, max_iter=max_iter, tol=tol
+            )
             self.sync()
         else:
             raise KeyError('Unrecognized compression method: ' + self.args.group.aggregation_method)
