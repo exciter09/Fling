@@ -9,10 +9,9 @@ exp_args = dict(
     learn=dict(
         device='cuda:0',
         local_eps=8,
-        global_eps=40,
+        global_eps=100,
         batch_size=32,
         optimizer=dict(name='sgd', lr=0.02, momentum=0.9),
-        test_place=['before_aggregation', 'after_aggregation'],
         mu=0.01,
     ),
     model=dict(
@@ -20,7 +19,7 @@ exp_args = dict(
         input_channel=3,
         class_number=100,
     ),
-    client=dict(name='fedprox_client', client_num=10),
+    client=dict(name='fedprox_client', client_num=30),
     server=dict(name='base_server'),
     group=dict(name='base_group', aggregation_method='avg'),
     other=dict(test_freq=3, logging_path='./logging/experimental/cifar100_fedprox_iid'),
