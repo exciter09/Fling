@@ -62,6 +62,7 @@ exp_args = dict(
         local_eps=5,
         global_eps=300,
         batch_size=100,
+        test_place=['after_aggregation', 'before_aggregation'],
         optimizer=dict(name='sgd', lr=0.1, momentum=0.9),{learn_extra}
     ),
     model=dict(
