@@ -24,28 +24,28 @@ SPLITS = {
 METHODS = {
     'fedavg': dict(
         client_name='base_client',
-        group_line="aggregation_method='avg'",
-        learn_extra='',
+        group_line="aggregation_method='avg', aggregation_parameters=dict(name='except', keywords=['fc'])",
+        learn_extra='\n        finetune_parameters=dict(name="contain", keywords=["fc"]),',
     ),
     'geomed': dict(
         client_name='base_client',
-        group_line="aggregation_method='generalized', aggregation_alpha=1.0",
-        learn_extra='',
+        group_line="aggregation_method='generalized', aggregation_alpha=1.0, aggregation_parameters=dict(name='except', keywords=['fc'])",
+        learn_extra='\n        finetune_parameters=dict(name="contain", keywords=["fc"]),',
     ),
     'gen15': dict(
         client_name='base_client',
-        group_line="aggregation_method='generalized', aggregation_alpha=1.5",
-        learn_extra='',
+        group_line="aggregation_method='generalized', aggregation_alpha=1.5, aggregation_parameters=dict(name='except', keywords=['fc'])",
+        learn_extra='\n        finetune_parameters=dict(name="contain", keywords=["fc"]),',
     ),
     'fedmedian': dict(
         client_name='base_client',
-        group_line="aggregation_method='median'",
-        learn_extra='',
+        group_line="aggregation_method='median', aggregation_parameters=dict(name='except', keywords=['fc'])",
+        learn_extra='\n        finetune_parameters=dict(name="contain", keywords=["fc"]),',
     ),
     'fedprox': dict(
         client_name='fedprox_client',
-        group_line="aggregation_method='avg'",
-        learn_extra='\n        mu=0.01,',
+        group_line="aggregation_method='avg', aggregation_parameters=dict(name='except', keywords=['fc'])",
+        learn_extra='\n        mu=0.01,\n        finetune_parameters=dict(name="contain", keywords=["fc"]),',
     ),
 }
 
@@ -78,8 +78,8 @@ exp_args = dict(
 exp_args = EasyDict(exp_args)
 
 if __name__ == '__main__':
-    from fling.pipeline import generic_model_pipeline
-    generic_model_pipeline(exp_args, seed=0)
+    from fling.pipeline import personalized_model_pipeline
+    personalized_model_pipeline(exp_args, seed=0)
 """
 
 count = 0

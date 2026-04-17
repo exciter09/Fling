@@ -13,6 +13,7 @@ exp_args = dict(
         batch_size=100,
         optimizer=dict(name='sgd', lr=0.1, momentum=0.9),
         mu=0.01,
+        finetune_parameters=dict(name="contain", keywords=["fc"]),
     ),
     model=dict(
         name='resnet8',
@@ -21,12 +22,12 @@ exp_args = dict(
     ),
     client=dict(name='fedprox_client', client_num=30),
     server=dict(name='base_server'),
-    group=dict(name='base_group', aggregation_method='avg'),
+    group=dict(name='base_group', aggregation_method='avg', aggregation_parameters=dict(name='except', keywords=['fc'])),
     other=dict(test_freq=3, logging_path='./logging/experimental/cifar100_fedprox_iid'),
 )
 
 exp_args = EasyDict(exp_args)
 
 if __name__ == '__main__':
-    from fling.pipeline import generic_model_pipeline
-    generic_model_pipeline(exp_args, seed=0)
+    from fling.pipeline import personalized_model_pipeline
+    personalized_model_pipeline(exp_args, seed=0)
