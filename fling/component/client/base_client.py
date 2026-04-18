@@ -40,7 +40,7 @@ class BaseClient(ClientTemplate):
         if val_frac == 0:
             # ``self.sample_num`` refers to the number of local training number.
             self.sample_num = len(train_dataset)
-            self.train_dataloader = DataLoader(train_dataset, batch_size=args.learn.batch_size, shuffle=True)
+            self.train_dataloader = self._build_dataloader(train_dataset, shuffle=True)
         else:
             # Separate a fraction of ``train_dataset`` for validating.
             real_train = copy.deepcopy(train_dataset)
@@ -56,11 +56,31 @@ class BaseClient(ClientTemplate):
             # ``self.sample_num`` refers to the number of local training number.
             self.sample_num = len(real_train)
 
-            self.train_dataloader = DataLoader(real_train, batch_size=args.learn.batch_size, shuffle=True)
-            self.val_dataloader = DataLoader(real_test, batch_size=args.learn.batch_size, shuffle=True)
+            self.train_dataloader = self._build_dataloader(real_train, shuffle=True)
+            self.val_dataloader = self._build_dataloader(real_test, shuffle=True)
 
         if test_dataset is not None:
-            self.test_dataloader = DataLoader(test_dataset, batch_size=args.learn.batch_size, shuffle=True)
+            self.test_dataloader = self._build_dataloader(test_dataset, shuffle=True)
+
+    def _build_dataloader(self, dataset: Dataset, shuffle: bool) -> DataLoader:
+        loader_kwargs = dict(batch_size=self.args.learn.batch_size, shuffle=shuffle)
+        num_workers = int(getattr(self.args.client, 'num_workers', 0))
+        pin_memory = bool(getattr(self.args.client, 'pin_memory', False))
+        persistent_workers = bool(getattr(self.args.client, 'persistent_workers', False))
+        prefetch_factor = getattr(self.args.client, 'prefetch_factor', None)
+
+        if num_workers > 0:
+            loader_kwargs['num_workers'] = num_workers
+            loader_kwargs['persistent_workers'] = persistent_workers
+            if prefetch_factor is not None:
+                loader_kwargs['prefetch_factor'] = int(prefetch_factor)
+        if pin_memory:
+            loader_kwargs['pin_memory'] = True
+        return DataLoader(dataset, **loader_kwargs)
+
+    def _to_device(self, tensor: torch.Tensor) -> torch.Tensor:
+        non_blocking = bool(getattr(self.args.client, 'pin_memory', False)) and str(self.device).startswith('cuda')
+        return tensor.to(self.device, non_blocking=non_blocking)
 
     def train_step(self, batch_data, criterion, monitor, optimizer):
         batch_x, batch_y = batch_data['x'], batch_data['y']
@@ -111,7 +131,7 @@ class BaseClient(ClientTemplate):
         )
 
     def preprocess_data(self, data):
-        return {'x': data['input'].to(self.device), 'y': data['class_id'].to(self.device)}
+        return {'x': self._to_device(data['input']), 'y': self._to_device(data['class_id'])}
 
     def train(self, lr, device=None, train_args=None):
         """
