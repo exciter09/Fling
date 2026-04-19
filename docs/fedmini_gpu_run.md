@@ -16,6 +16,9 @@ Recommended CUDA command pattern:
 PYTHONPATH=. python scripts/run_fedmini_paper.py --device cuda:0
 ```
 
+By default, the script shows an outer experiment progress bar and an inner per-round progress bar.
+Use `--no-progress` if you prefer plain text logs only.
+
 ## Full Paper Sweep
 
 Run the CIFAR-100 and Tiny-ImageNet experiments for both Dirichlet and Pathological settings, with seeds `0 1 2`:

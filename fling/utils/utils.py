@@ -17,12 +17,14 @@ def client_sampling(client_ids: Iterable, sample_rate: float) -> List:
 
 class Logger(SummaryWriter):
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, enable_stdout: bool = True):
         super(Logger, self).__init__(path)
         self.txt_logger_path = os.path.join(path, 'txt_logger_output.txt')
+        self.enable_stdout = enable_stdout
 
     def logging(self, s: str) -> None:
-        print(s)
+        if self.enable_stdout:
+            print(s)
         with open(self.txt_logger_path, mode='a') as f:
             f.write('[' + time.asctime(time.localtime(time.time())) + ']    ' + s + '\n')
 

@@ -110,6 +110,8 @@ def build_fedmini_paper_exp_args(
         other=dict(
             test_freq=test_freq,
             logging_path=logging_path,
+            progress_bar=True,
+            experiment_name=f'{dataset}:{split_mode}:{_format_split_value(split_value)}:seed{seed_for_path}',
         )
     )
     return EasyDict(exp_args)

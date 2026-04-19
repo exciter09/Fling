@@ -1,11 +1,20 @@
 import argparse
 import os
 import sys
+import warnings
 from copy import deepcopy
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
+
+warnings.filterwarnings(
+    'ignore',
+    message='Importing from timm.models.layers is deprecated, please import via timm.layers',
+    category=FutureWarning
+)
+
+from tqdm import tqdm
 
 from fling.pipeline import fedmini_pipeline
 from flzoo.fedmini_utils import DATASET_META, build_fedmini_paper_exp_args
@@ -56,6 +65,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--amp-dtype', type=str, default='float16', choices=['float16', 'bfloat16'])
     parser.add_argument('--no-amp', action='store_true')
+    parser.add_argument('--no-progress', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     parsed = parser.parse_args()
     parsed.pathological_split = {
@@ -69,30 +79,49 @@ def main():
     args = parse_args()
     run_plan = build_run_plan(args)
     print(f'FedMini run plan size: {len(run_plan)}')
-    for idx, (dataset, scenario, split_value, seed) in enumerate(run_plan, start=1):
-        print(
-            f'[{idx}/{len(run_plan)}] dataset={dataset} scenario={scenario} split_value={split_value} '
-            f'seed={seed} device={args.device}'
-        )
-        if args.dry_run:
-            continue
-        exp_args = build_fedmini_paper_exp_args(
-            dataset=dataset,
-            split_mode=scenario,
-            split_value=split_value,
-            device=args.device,
-            logging_root=args.logging_root,
-            seed_for_path=seed,
-            num_workers=args.num_workers,
-            test_freq=args.test_freq,
-            global_eps=args.global_eps,
-            local_eps=args.local_eps,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            use_amp=(not args.no_amp),
-            amp_dtype=args.amp_dtype,
-        )
-        fedmini_pipeline(args=deepcopy(exp_args), seed=seed)
+    run_progress = tqdm(total=len(run_plan), desc='FedMini runs', dynamic_ncols=True, disable=args.no_progress)
+    try:
+        for idx, (dataset, scenario, split_value, seed) in enumerate(run_plan, start=1):
+            run_message = (
+                f'[{idx}/{len(run_plan)}] dataset={dataset} scenario={scenario} split_value={split_value} '
+                f'seed={seed} device={args.device}'
+            )
+            if args.no_progress:
+                print(run_message)
+            else:
+                tqdm.write(run_message)
+                run_progress.set_postfix(
+                    dataset=dataset,
+                    scenario=scenario,
+                    split=split_value,
+                    seed=seed
+                )
+                run_progress.refresh()
+            if args.dry_run:
+                run_progress.update(1)
+                continue
+            exp_args = build_fedmini_paper_exp_args(
+                dataset=dataset,
+                split_mode=scenario,
+                split_value=split_value,
+                device=args.device,
+                logging_root=args.logging_root,
+                seed_for_path=seed,
+                num_workers=args.num_workers,
+                test_freq=args.test_freq,
+                global_eps=args.global_eps,
+                local_eps=args.local_eps,
+                batch_size=args.batch_size,
+                lr=args.lr,
+                use_amp=(not args.no_amp),
+                amp_dtype=args.amp_dtype,
+            )
+            exp_args.other.progress_bar = not args.no_progress
+            exp_args.other.experiment_name = f'{dataset}:{scenario}:{split_value}:seed{seed}'
+            fedmini_pipeline(args=deepcopy(exp_args), seed=seed)
+            run_progress.update(1)
+    finally:
+        run_progress.close()
 
 
 if __name__ == '__main__':

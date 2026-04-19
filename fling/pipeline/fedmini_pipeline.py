@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import torch
+from tqdm import tqdm
 
 from fling.component.client import get_client
 from fling.component.group import get_group
@@ -73,9 +74,11 @@ def fedmini_pipeline(args: dict, seed: int = 0) -> None:
         Pipeline for the minimal FedMini reproduction used in this workspace.
     """
     args = compile_config(args, seed=seed)
+    show_progress = bool(getattr(args.other, 'progress_bar', False))
+    experiment_name = str(getattr(args.other, 'experiment_name', os.path.basename(args.other.logging_path.rstrip('/'))))
     if str(args.learn.device).startswith('cuda'):
         torch.backends.cudnn.benchmark = bool(getattr(args.learn, 'cudnn_benchmark', True))
-    logger = Logger(args.other.logging_path)
+    logger = Logger(args.other.logging_path, enable_stdout=not show_progress)
     round_metrics_path = os.path.join(args.other.logging_path, 'round_metrics.jsonl')
     freeze_events_path = os.path.join(args.other.logging_path, 'freeze_events.jsonl')
     round_csv_path = os.path.join(args.other.logging_path, 'round_metrics.csv')
@@ -114,106 +117,128 @@ def fedmini_pipeline(args: dict, seed: int = 0) -> None:
     freeze_event_records = []
     cumulative_trans_cost_mb = 0.0
     executed_rounds = 0
+    progress_bar = tqdm(
+        total=int(args.learn.global_eps),
+        desc=experiment_name,
+        dynamic_ncols=True,
+        leave=True,
+        disable=not show_progress
+    )
 
-    for i in range(args.learn.global_eps):
-        round_args = group.get_round_args(i)
-        if round_args['stage'] == 'finished':
-            logger.logging('All layer groups are frozen. Stop training early.')
-            break
+    try:
+        for i in range(args.learn.global_eps):
+            round_args = group.get_round_args(i)
+            if round_args['stage'] == 'finished':
+                logger.logging('All layer groups are frozen. Stop training early.')
+                if show_progress:
+                    progress_bar.set_postfix(status='finished', frozen=int(sum(group.frozen_groups)))
+                break
 
-        logger.logging(f'Starting round: {i}')
-        train_monitor = VariableMonitor()
-        participated_clients = client_sampling(range(args.client.client_num), args.client.sample_rate)
-        cur_lr = lr_scheduler.get_lr(train_round=i)
+            logger.logging(f'Starting round: {i}')
+            train_monitor = VariableMonitor()
+            participated_clients = client_sampling(range(args.client.client_num), args.client.sample_rate)
+            cur_lr = lr_scheduler.get_lr(train_round=i)
 
-        train_results = launcher.launch(
-            clients=[group.clients[j] for j in participated_clients],
-            lr=cur_lr,
-            task_name='train',
-            train_args=round_args['train_args']
-        )
-        for item in train_results:
-            train_monitor.append(item)
-        participated_client_objs = [group.clients[j] for j in participated_clients]
-        client_stats = [getattr(client, 'round_statistics', {}) for client in participated_client_objs]
-        sensitive_ratio_values = [stat.get('sensitive_ratio', 0.0) for stat in client_stats]
-        active_param_values = [stat.get('active_param_num', 0) for stat in client_stats]
-
-        before_test_result = None
-        if i % args.other.test_freq == 0 and "before_aggregation" in args.learn.test_place:
-            test_monitor = VariableMonitor()
-            test_results = launcher.launch(
-                clients=[group.clients[j] for j in range(args.client.client_num)],
-                task_name='test'
+            train_results = launcher.launch(
+                clients=[group.clients[j] for j in participated_clients],
+                lr=cur_lr,
+                task_name='train',
+                train_args=round_args['train_args']
             )
-            for item in test_results:
-                test_monitor.append(item)
-            before_test_result = test_monitor.variable_mean()
-            logger.add_scalars_dict(prefix='before_aggregation_test', dic=before_test_result, rnd=i)
+            for item in train_results:
+                train_monitor.append(item)
+            participated_client_objs = [group.clients[j] for j in participated_clients]
+            client_stats = [getattr(client, 'round_statistics', {}) for client in participated_client_objs]
+            sensitive_ratio_values = [stat.get('sensitive_ratio', 0.0) for stat in client_stats]
+            active_param_values = [stat.get('active_param_num', 0) for stat in client_stats]
 
-        trans_cost = group.aggregate(
-            i,
-            participate_clients_ids=participated_clients,
-            aggr_parameter_args=round_args['aggr_args']
-        )
-        cumulative_trans_cost_mb += trans_cost / 1e6
-        group_stats = group.get_last_round_stats()
+            before_test_result = None
+            if i % args.other.test_freq == 0 and "before_aggregation" in args.learn.test_place:
+                test_monitor = VariableMonitor()
+                test_results = launcher.launch(
+                    clients=[group.clients[j] for j in range(args.client.client_num)],
+                    task_name='test'
+                )
+                for item in test_results:
+                    test_monitor.append(item)
+                before_test_result = test_monitor.variable_mean()
+                logger.add_scalars_dict(prefix='before_aggregation_test', dic=before_test_result, rnd=i)
 
-        mean_train_variables = train_monitor.variable_mean()
-        mean_train_variables.update(
-            {
-                'trans_cost(MB)': trans_cost / 1e6,
-                'lr': cur_lr,
-                'index': int(round_args['group_index']),
-                'stage_id': 0 if round_args['stage'] == 'warmup' else 1,
-                'frozen_groups': float(sum(group.frozen_groups)),
-                'sensitive_ratio_mean': float(sum(sensitive_ratio_values) / len(sensitive_ratio_values)),
-                'active_param_num_mean': float(sum(active_param_values) / len(active_param_values)),
+            trans_cost = group.aggregate(
+                i,
+                participate_clients_ids=participated_clients,
+                aggr_parameter_args=round_args['aggr_args']
+            )
+            cumulative_trans_cost_mb += trans_cost / 1e6
+            group_stats = group.get_last_round_stats()
+
+            mean_train_variables = train_monitor.variable_mean()
+            mean_train_variables.update(
+                {
+                    'trans_cost(MB)': trans_cost / 1e6,
+                    'lr': cur_lr,
+                    'index': int(round_args['group_index']),
+                    'stage_id': 0 if round_args['stage'] == 'warmup' else 1,
+                    'frozen_groups': float(sum(group.frozen_groups)),
+                    'sensitive_ratio_mean': float(sum(sensitive_ratio_values) / len(sensitive_ratio_values)),
+                    'active_param_num_mean': float(sum(active_param_values) / len(active_param_values)),
+                }
+            )
+            logger.add_scalars_dict(prefix='train', dic=mean_train_variables, rnd=i)
+            fedmini_log_scalars = {
+                key: value for key, value in group_stats.items()
+                if isinstance(value, (int, float)) and value is not None
             }
-        )
-        logger.add_scalars_dict(prefix='train', dic=mean_train_variables, rnd=i)
-        fedmini_log_scalars = {
-            key: value for key, value in group_stats.items()
-            if isinstance(value, (int, float)) and value is not None
-        }
-        fedmini_log_scalars['cumulative_trans_cost_mb'] = cumulative_trans_cost_mb
-        logger.add_scalars_dict(prefix='fedmini', dic=fedmini_log_scalars, rnd=i)
+            fedmini_log_scalars['cumulative_trans_cost_mb'] = cumulative_trans_cost_mb
+            logger.add_scalars_dict(prefix='fedmini', dic=fedmini_log_scalars, rnd=i)
 
-        after_test_result = None
-        if i % args.other.test_freq == 0 and "after_aggregation" in args.learn.test_place:
-            test_monitor = VariableMonitor()
-            test_results = launcher.launch(
-                clients=[group.clients[j] for j in range(args.client.client_num)],
-                task_name='test'
+            after_test_result = None
+            if i % args.other.test_freq == 0 and "after_aggregation" in args.learn.test_place:
+                test_monitor = VariableMonitor()
+                test_results = launcher.launch(
+                    clients=[group.clients[j] for j in range(args.client.client_num)],
+                    task_name='test'
+                )
+                for item in test_results:
+                    test_monitor.append(item)
+                after_test_result = test_monitor.variable_mean()
+                logger.add_scalars_dict(prefix='after_aggregation_test', dic=after_test_result, rnd=i)
+                torch.save(group.server.glob_dict, os.path.join(args.other.logging_path, 'model.ckpt'))
+            round_record = dict(
+                round=i,
+                lr=cur_lr,
+                stage=round_args['stage'],
+                group_index=round_args['group_index'],
+                train=mean_train_variables,
+                before_aggregation_test=before_test_result,
+                after_aggregation_test=after_test_result,
+                group_stats=group_stats,
+                cumulative_trans_cost_mb=cumulative_trans_cost_mb,
+                participated_client_num=len(participated_clients),
+                participated_clients=list(participated_clients),
+                sensitive_ratio_mean=float(sum(sensitive_ratio_values) / len(sensitive_ratio_values)),
+                sensitive_ratio_std=float(torch.tensor(sensitive_ratio_values).std(unbiased=False).item()),
+                active_param_num_mean=float(sum(active_param_values) / len(active_param_values)),
             )
-            for item in test_results:
-                test_monitor.append(item)
-            after_test_result = test_monitor.variable_mean()
-            logger.add_scalars_dict(prefix='after_aggregation_test', dic=after_test_result, rnd=i)
-            torch.save(group.server.glob_dict, os.path.join(args.other.logging_path, 'model.ckpt'))
-        round_record = dict(
-            round=i,
-            lr=cur_lr,
-            stage=round_args['stage'],
-            group_index=round_args['group_index'],
-            train=mean_train_variables,
-            before_aggregation_test=before_test_result,
-            after_aggregation_test=after_test_result,
-            group_stats=group_stats,
-            cumulative_trans_cost_mb=cumulative_trans_cost_mb,
-            participated_client_num=len(participated_clients),
-            participated_clients=list(participated_clients),
-            sensitive_ratio_mean=float(sum(sensitive_ratio_values) / len(sensitive_ratio_values)),
-            sensitive_ratio_std=float(torch.tensor(sensitive_ratio_values).std(unbiased=False).item()),
-            active_param_num_mean=float(sum(active_param_values) / len(active_param_values)),
-        )
-        round_records.append(round_record)
-        _append_jsonl(round_metrics_path, round_record)
-        if group.last_freeze_event is not None:
-            freeze_event_record = dict(round=i, **group.last_freeze_event)
-            freeze_event_records.append(freeze_event_record)
-            _append_jsonl(freeze_events_path, freeze_event_record)
-        executed_rounds += 1
+            round_records.append(round_record)
+            _append_jsonl(round_metrics_path, round_record)
+            if group.last_freeze_event is not None:
+                freeze_event_record = dict(round=i, **group.last_freeze_event)
+                freeze_event_records.append(freeze_event_record)
+                _append_jsonl(freeze_events_path, freeze_event_record)
+            executed_rounds += 1
+            if show_progress:
+                progress_bar.update(1)
+                progress_bar.set_postfix(
+                    round=i,
+                    stage=round_args['stage'],
+                    group=int(round_args['group_index']),
+                    train_acc=f'{mean_train_variables.get("train_acc", 0.0):.4f}',
+                    test_acc='-' if after_test_result is None else f'{after_test_result.get("test_acc", 0.0):.4f}',
+                    frozen=int(sum(group.frozen_groups))
+                )
+    finally:
+        progress_bar.close()
 
     _write_csv(round_csv_path, round_records)
     best_after_acc = None
