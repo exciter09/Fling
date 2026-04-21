@@ -58,11 +58,20 @@ def parse_args():
     parser.add_argument('--device', type=str, default='cuda:0')
     parser.add_argument('--logging-root', type=str, default='./logging/fedmini_paper')
     parser.add_argument('--num-workers', type=int, default=8)
+    parser.add_argument('--client-num', type=int, default=50)
+    parser.add_argument('--sample-rate', type=float, default=1.0)
     parser.add_argument('--test-freq', type=int, default=1)
     parser.add_argument('--global-eps', type=int, default=300)
     parser.add_argument('--local-eps', type=int, default=5)
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--sensitivity-weight', type=float, default=0.7)
+    parser.add_argument('--warmup-rounds', type=int, default=94)
+    parser.add_argument('--full-update-rounds', type=int, default=5)
+    parser.add_argument('--rounds-per-group', type=int, default=2)
+    parser.add_argument('--freeze-threshold', type=float, default=0.2)
+    parser.add_argument('--freeze-ema', type=float, default=0.5)
+    parser.add_argument('--freeze-max-rounds', type=int, default=10)
     parser.add_argument('--amp-dtype', type=str, default='float16', choices=['float16', 'bfloat16'])
     parser.add_argument('--no-amp', action='store_true')
     parser.add_argument('--no-progress', action='store_true')
@@ -107,6 +116,8 @@ def main():
                 device=args.device,
                 logging_root=args.logging_root,
                 seed_for_path=seed,
+                client_num=args.client_num,
+                sample_rate=args.sample_rate,
                 num_workers=args.num_workers,
                 test_freq=args.test_freq,
                 global_eps=args.global_eps,
@@ -115,6 +126,13 @@ def main():
                 lr=args.lr,
                 use_amp=(not args.no_amp),
                 amp_dtype=args.amp_dtype,
+                sensitivity_weight=args.sensitivity_weight,
+                full_update_rounds=args.full_update_rounds,
+                rounds_per_group=args.rounds_per_group,
+                warmup_rounds=args.warmup_rounds,
+                freeze_threshold=args.freeze_threshold,
+                freeze_ema=args.freeze_ema,
+                freeze_max_rounds=args.freeze_max_rounds,
             )
             exp_args.other.progress_bar = not args.no_progress
             exp_args.other.experiment_name = f'{dataset}:{scenario}:{split_value}:seed{seed}'
